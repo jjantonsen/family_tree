@@ -27,7 +27,7 @@ client.delete_person(12) # Delete the person with database ID 12. All links to o
 
 Print the family tree:
 ```
-client = family_tree.print_tree() # Returns the family tree in .pdf-format (pdf, png, ps and jpg available)
+client.print_tree() # Returns the family tree in .pdf-format (pdf, png, ps and jpg available)
 ```
 
 Individuals are handled as Person objects.
