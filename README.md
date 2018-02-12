@@ -1,4 +1,4 @@
-Family Tree API v0.9
+# Family Tree API v0.9
 
 A simple API for storing, editing and visualizing your family tree.
 
