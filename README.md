@@ -1,6 +1,6 @@
 # Family Tree API v0.9
 
-A simple API for storing, editing and visualizing your family tree.
+A simple API for creating, editing and visualizing your family tree.
 
 - Storage is done using MongoDB (currently supports only one single family tree)
 - Visualization is done using Dot graphs
