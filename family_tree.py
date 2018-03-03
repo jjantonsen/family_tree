@@ -6,8 +6,6 @@ a network of Persons that includes life information
 about the individual Persons
 
 TODO:
-- Generalize names: slekt.py, slektstre must be renamed to family_tree
-- Support multiple family trees, i.e. databases
 - Write export functions (excel, other formats)
 - Finish incomplete/unwritten functions
 - Prevent 'illegal' input, e.g.:
@@ -36,7 +34,8 @@ import json
 import os
 from subprocess import check_call
 
-DB_NAME = "slektstre"
+DB_NAME = "family_tree"
+COLLECTION = "my_family_tree"
 CLIENT = pymongo.MongoClient()[DB_NAME]
 
 
@@ -76,9 +75,11 @@ class Person():
     last_change_date = None
     
 
-    def setup(self, first_name, middle_name, last_name, gender, mother, father, spouses, children, birth_date, death_date, birth_place, death_place, occupation, life_story, comment):
+    def setup(self, first_name, middle_name, last_name, gender, mother, father, spouses, children, birth_date, death_date, birth_place, death_place, occupation, life_story, comment, collection=COLLECTION):
         """ set the attributes of the Person """
         assert self.version == 0, "The person has already been initialized"
+
+        self.collection = collection
 
         self.first_name = first_name
         self.middle_name = middle_name
@@ -102,7 +103,7 @@ class Person():
         self.add_date = datetime.datetime.now()
         self.__update()
 
-    def from_db_data(self, first_name, middle_name, last_name, gender, mother, father, spouses, children, birth_date, death_date, birth_place, death_place, occupation, life_story, database_id, comment, add_date, version, last_change_date, _id=''):
+    def from_db_data(self, first_name, middle_name, last_name, gender, mother, father, spouses, children, birth_date, death_date, birth_place, death_place, occupation, life_story, database_id, comment, add_date, version, last_change_date, _id='', collection=COLLECTION):
         """
         load the data from a database entry (unpacked dict)
         Example call: Person.from_db_data(**db_query_dict)
@@ -130,6 +131,8 @@ class Person():
         self.version = version
         self.last_change_date = last_change_date
 
+        self.collection = collection
+
     def delete(self):
         """ delete person from database """
         failure_msg = "Was not able to delete the person from database"
@@ -138,7 +141,7 @@ class Person():
 
         # Then remove the person itself
         try:
-            del_result = CLIENT["slektstre"].delete_one({"database_id":self.database_ID})
+            del_result = CLIENT[self.collection].delete_one({"database_id":self.database_ID})
             assert del_result.acknowledged, failure_msg
         except:
             raise Exception(failure_msg)
@@ -162,7 +165,7 @@ class Person():
         equal to the largest existing id + 1
         """
         try:
-            return CLIENT["slektstre"].find_one(sort=[("database_id",-1)])["database_id"]+1
+            return CLIENT[self.collection].find_one(sort=[("database_id",-1)])["database_id"]+1
         except: # Database does not exist
             return 1
 
@@ -194,7 +197,7 @@ class Person():
             "version":self.version,
             "last_change_date":self.last_change_date
         }
-        CLIENT["slektstre"].insert_one(db_doc)
+        CLIENT[self.collection].insert_one(db_doc)
         self.__update_other_fields(append=True)
 
     def __update_other_fields(self, append):
@@ -218,7 +221,7 @@ class Person():
 
     def __update_other_lists(self, other_db_id, link_field, append):
         """ update the other persons list of a Person's parent """
-        other_data = CLIENT["slektstre"].find_one({"database_id":other_db_id})
+        other_data = CLIENT[self.collection].find_one({"database_id":other_db_id})
         relation_list = other_data[link_field]
         other_version = other_data["version"]
         if append:
@@ -227,7 +230,7 @@ class Person():
         else:
             if self.database_ID in relation_list:
                 relation_list.remove(self.database_ID)
-        CLIENT["slektstre"].update({"database_id": other_db_id},
+        CLIENT[self.collection].update({"database_id": other_db_id},
                                    {"$set": {link_field: relation_list,
                                              "version": other_version+1,
                                              "last_change_date": datetime.datetime.now()}},
@@ -249,8 +252,8 @@ class Person():
             new_relation_value = -1
 
         for child in self.children:
-            child_version = CLIENT["slektstre"].find_one({"database_id":child})["version"]
-            CLIENT["slektstre"].update({"database_id": child},
+            child_version = CLIENT[self.collection].find_one({"database_id":child})["version"]
+            CLIENT[self.collection].update({"database_id": child},
                                        {"$set":{relation: new_relation_value,
                                                 "version": child_version+1,
                                                 "last_change_date": datetime.datetime.now(),
@@ -264,12 +267,24 @@ class FamilyTreeClient():
     including adding, loading, deleting and querying persons.
     Also includes functionality for printing the family tree.
     """
-    def __init__(self, db_name="slektstre"):
-        self.db_name = db_name
+    def __init__(self, collection=COLLECTION):
+        self.collection = collection
         try:
-            self.db = CLIENT[db_name]
+            self.db = CLIENT[collection]
+            print("Current family tree: {}\nNumber of persons: {}"\
+                  .format(self.collection, self.db.count()))
         except:
-            self.db = None
+            raise Exception("Unable to open collection {}".format(self.collection))
+
+    def change_tree(self, new_collection):
+        """ Change current family tree """
+        self.__init__(collection=new_collection)
+
+    def list_family_trees(self):
+        """ Print a list of the existing family trees """
+        for collection in CLIENT.collection_names():
+            print("{},\t{} persons".format(collection,
+                                           CLIENT[collection].count()))
 
     def add_person(self):
         """ Add a person to the database """
@@ -314,7 +329,8 @@ class FamilyTreeClient():
                      death_place,
                      occupation,
                      life_story,
-                     comment)
+                     comment,
+                     self.collection)
         person.add_to_db()
         print("Person added to database with database ID {}".format(person.database_ID))
 
@@ -373,7 +389,7 @@ class FamilyTreeClient():
             print("Database ID {} not found".format(db_id))
         else:
             person = Person()
-            person.from_db_data(**results)
+            person.from_db_data(**results, collection=self.collection)
             return person
             
 
@@ -491,7 +507,7 @@ class FamilyTreeClient():
         format_list = ["pdf", "png", "jpg", "ps"]
         assert out_ext in format_list, "Illegal output format. output_format must be one of the following: {}".format(format_list)
         if filename == "":
-            filename = self.db_name
+            filename = self.collection
         else:
             assert filename.split(".")[-1] != out_ext, "filename must include correct file extension: .{}".format(out_ext)
 
