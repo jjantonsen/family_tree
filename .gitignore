@@ -1,2 +1,7 @@
 # Python cache
 __pycache__
+
+# Optionally generated family trees
+*.gv
+*.pdf
+
