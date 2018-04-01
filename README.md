@@ -2,7 +2,7 @@
 
 A simple API for creating, editing and visualizing your family tree.
 
-- Storage is done using MongoDB (currently supports only one single family tree)
+- Storage is done using MongoDB
 - Visualization is done using Dot graphs
 
 All interaction with the family database is done through the FamilyTreeClient, which provides an interface for adding, deleting, searching and visualizing. 
